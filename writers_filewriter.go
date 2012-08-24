@@ -37,12 +37,12 @@ type fileWriter struct {
 }
 
 // Creates a new file and a corresponding writer. Returns error, if the file couldn't be created.
-func newFileWriter(fileName string) (writer *fileWriter, err error) {
+func newFileWriter(fileName string, overwrite bool) (writer *fileWriter, err error) {
 	newWriter := new(fileWriter)
 
 	newWriter.fileName = fileName
 
-	fileErr := newWriter.createFile()
+	fileErr := newWriter.createFile(overwrite)
 	if fileErr != nil {
 		return nil, fileErr
 	}
@@ -59,7 +59,7 @@ func (fileWriter *fileWriter) Write(bytes []byte) (n int, err error) {
 	return fileWriter.innerWriter.Write(bytes)
 }
 
-func (fileWriter *fileWriter) createFile() error {
+func (fileWriter *fileWriter) createFile(overwrite bool) error {
 
 	folder, _ := filepath.Split(fileWriter.fileName)
 
@@ -70,7 +70,7 @@ func (fileWriter *fileWriter) createFile() error {
 	}
 
 	var innerWriter io.WriteCloser
-	if fileSystemWrapper.Exists(fileWriter.fileName) {
+	if fileSystemWrapper.Exists(fileWriter.fileName) && !overwrite {
 		innerWriter, err = fileSystemWrapper.Open(fileWriter.fileName)
 	} else {
 		innerWriter, err = fileSystemWrapper.Create(fileWriter.fileName)

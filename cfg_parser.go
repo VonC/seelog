@@ -25,12 +25,12 @@
 package seelog
 
 import (
-	"time"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -48,6 +48,7 @@ const (
 	FormatAttrId                    = "format"
 	FormatKeyAttrId                 = "id"
 	OutputFormatId                  = "formatid"
+	OverwriteAttr                   = "overwrite"
 	FilePathId                      = "path"
 	FileWriterId                    = "file"
 	SmtpWriterId                    = "smtp"
@@ -78,10 +79,10 @@ const (
 	AdaptLoggerMaxIntervalAttr      = "maxinterval"
 	AdaptLoggerCriticalMsgCountAttr = "critmsgcount"
 	PredefinedPrefix                = "std:"
-	ConnWriterId = "conn"
-	ConnWriterAddrAttr = "addr"
-	ConnWriterNetAttr = "net"
-	ConnWriterReconnectOnMsgAttr = "reconnectonmsg"
+	ConnWriterId                    = "conn"
+	ConnWriterAddrAttr              = "addr"
+	ConnWriterNetAttr               = "net"
+	ConnWriterReconnectOnMsgAttr    = "reconnectonmsg"
 )
 
 var (
@@ -96,7 +97,8 @@ func (e unexpectedChildElementError) Error() string {
 }
 
 type elementMapEntry struct {
-	constructor func(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error)
+	constructor func(node *xmlNode, formatFromParent *formatter,
+		formats map[string]*formatter, overwrite bool) (interface{}, error)
 }
 
 var elementMap map[string]elementMapEntry
@@ -480,7 +482,7 @@ func getOutputsTree(config *xmlNode, formats map[string]*formatter) (dispatcherI
 	}
 
 	if outputsNode != nil {
-		err := checkUnexpectedAttribute(outputsNode, OutputFormatId)
+		err := checkUnexpectedAttribute(outputsNode, OutputFormatId, OverwriteAttr)
 		if err != nil {
 			return nil, err
 		}
@@ -489,8 +491,9 @@ func getOutputsTree(config *xmlNode, formats map[string]*formatter) (dispatcherI
 		if err != nil {
 			return nil, err
 		}
-
-		output, err := createSplitter(outputsNode, formatter, formats)
+		overwrite := false
+		overwrite = getOverwite(outputsNode, overwrite)
+		output, err := createSplitter(outputsNode, formatter, formats, overwrite)
 		if err != nil {
 			return nil, err
 		}
@@ -513,7 +516,7 @@ func getCurrentFormat(node *xmlNode, formatFromParent *formatter, formats map[st
 	if !isFormatId {
 		return formatFromParent, nil
 	}
-	
+
 	format, ok := formats[formatId]
 	if ok {
 		return format, nil
@@ -529,7 +532,21 @@ func getCurrentFormat(node *xmlNode, formatFromParent *formatter, formats map[st
 	return pdFormat, nil
 }
 
-func createInnerReceivers(node *xmlNode, format *formatter, formats map[string]*formatter) ([]interface{}, error) {
+func getOverwite(node *xmlNode, overwrite bool) bool {
+	overwriteAttrValue, hasOverwriteAttr := node.attributes[OverwriteAttr]
+	if hasOverwriteAttr {
+		if overwriteAttrValue == "true" {
+			overwrite = true
+		} else if overwriteAttrValue == "false" {
+			overwrite = false
+		}
+		// any other value for this attribute will be ignored
+		// the initial overwrite value will be returned
+	}
+	return overwrite
+}
+
+func createInnerReceivers(node *xmlNode, format *formatter, overwrite bool, formats map[string]*formatter) ([]interface{}, error) {
 	outputs := make([]interface{}, 0)
 	for _, childNode := range node.children {
 		entry, ok := elementMap[childNode.name]
@@ -537,7 +554,8 @@ func createInnerReceivers(node *xmlNode, format *formatter, formats map[string]*
 			return nil, errors.New("Unnknown tag '" + childNode.name + "' in outputs section")
 		}
 
-		output, err := entry.constructor(childNode, format, formats)
+		overwrite = getOverwite(node, overwrite)
+		output, err := entry.constructor(childNode, format, formats, overwrite)
 		if err != nil {
 			return nil, err
 		}
@@ -548,8 +566,8 @@ func createInnerReceivers(node *xmlNode, format *formatter, formats map[string]*
 	return outputs, nil
 }
 
-func createSplitter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
-	err := checkUnexpectedAttribute(node, OutputFormatId)
+func createSplitter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
+	err := checkUnexpectedAttribute(node, OutputFormatId, OverwriteAttr)
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +581,9 @@ func createSplitter(node *xmlNode, formatFromParent *formatter, formats map[stri
 		return nil, err
 	}
 
-	receivers, err := createInnerReceivers(node, currentFormat, formats)
+	overwrite = getOverwite(node, overwrite)
+
+	receivers, err := createInnerReceivers(node, currentFormat, overwrite, formats)
 	if err != nil {
 		return nil, err
 	}
@@ -571,8 +591,8 @@ func createSplitter(node *xmlNode, formatFromParent *formatter, formats map[stri
 	return newSplitDispatcher(currentFormat, receivers)
 }
 
-func createFilter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
-	err := checkUnexpectedAttribute(node, OutputFormatId, FilterLevelsAttrId)
+func createFilter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
+	err := checkUnexpectedAttribute(node, OutputFormatId, FilterLevelsAttrId, OverwriteAttr)
 	if err != nil {
 		return nil, err
 	}
@@ -596,7 +616,9 @@ func createFilter(node *xmlNode, formatFromParent *formatter, formats map[string
 		return nil, err
 	}
 
-	receivers, err := createInnerReceivers(node, currentFormat, formats)
+	overwrite = getOverwite(node, overwrite)
+
+	receivers, err := createInnerReceivers(node, currentFormat, overwrite, formats)
 	if err != nil {
 		return nil, err
 	}
@@ -604,8 +626,8 @@ func createFilter(node *xmlNode, formatFromParent *formatter, formats map[string
 	return newFilterDispatcher(currentFormat, receivers, levels...)
 }
 
-func createfileWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
-	err := checkUnexpectedAttribute(node, OutputFormatId, FilePathId)
+func createfileWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
+	err := checkUnexpectedAttribute(node, OutputFormatId, FilePathId, OverwriteAttr)
 	if err != nil {
 		return nil, err
 	}
@@ -624,7 +646,9 @@ func createfileWriter(node *xmlNode, formatFromParent *formatter, formats map[st
 		return nil, missingArgumentError(node.name, FilePathId)
 	}
 
-	fileWriter, err := newFileWriter(path)
+	overwrite = getOverwite(node, overwrite)
+
+	fileWriter, err := newFileWriter(path, overwrite)
 	if err != nil {
 		return nil, err
 	}
@@ -633,7 +657,8 @@ func createfileWriter(node *xmlNode, formatFromParent *formatter, formats map[st
 }
 
 // Creates new SMTP writer if encountered in the config file
-func createsmtpWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
+// overwrite is ignored here
+func createsmtpWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
 	err := checkUnexpectedAttribute(
 		node,
 		OutputFormatId,
@@ -712,7 +737,8 @@ func createsmtpWriter(node *xmlNode, formatFromParent *formatter, formats map[st
 	return newFormattedWriter(smtpWriter, currentFormat)
 }
 
-func createconsoleWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
+// overwrite is ignored here
+func createconsoleWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
 	err := checkUnexpectedAttribute(node, OutputFormatId)
 	if err != nil {
 		return nil, err
@@ -735,31 +761,32 @@ func createconsoleWriter(node *xmlNode, formatFromParent *formatter, formats map
 	return newFormattedWriter(consoleWriter, currentFormat)
 }
 
-func createconnWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
+// overwrite is ignored here
+func createconnWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
 	if node.hasChildren() {
 		return nil, nodeCannotHaveChildrenError
 	}
-	
+
 	err := checkUnexpectedAttribute(node, OutputFormatId, ConnWriterAddrAttr, ConnWriterNetAttr, ConnWriterReconnectOnMsgAttr)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	currentFormat, err := getCurrentFormat(node, formatFromParent, formats)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	addr, isAddr := node.attributes[ConnWriterAddrAttr]
 	if !isAddr {
 		return nil, missingArgumentError(node.name, ConnWriterAddrAttr)
 	}
-	
+
 	net, isNet := node.attributes[ConnWriterNetAttr]
 	if !isNet {
 		return nil, missingArgumentError(node.name, ConnWriterNetAttr)
 	}
-	
+
 	reconnectOnMsg := false
 	reconnectOnMsgStr, isReconnectOnMsgStr := node.attributes[ConnWriterReconnectOnMsgAttr]
 	if isReconnectOnMsgStr {
@@ -771,13 +798,13 @@ func createconnWriter(node *xmlNode, formatFromParent *formatter, formats map[st
 			return nil, errors.New("Node '" + node.name + "' has incorrect '" + ConnWriterReconnectOnMsgAttr + "' attribute value")
 		}
 	}
-	
+
 	connWriter := newConnWriter(net, addr, reconnectOnMsg)
 
 	return newFormattedWriter(connWriter, currentFormat)
 }
 
-func createrollingFileWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
+func createrollingFileWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
 	if node.hasChildren() {
 		return nil, nodeCannotHaveChildrenError
 	}
@@ -801,6 +828,7 @@ func createrollingFileWriter(node *xmlNode, formatFromParent *formatter, formats
 	if !isPath {
 		return nil, missingArgumentError(node.name, RollingFilePathAttr)
 	}
+	overwrite = getOverwite(node, overwrite)
 
 	if rollingType == Size {
 		err := checkUnexpectedAttribute(node, OutputFormatId, RollingFileTypeAttr, RollingFilePathAttr, RollingFileMaxSizeAttr, RollingFileMaxRollsAttr)
@@ -828,7 +856,7 @@ func createrollingFileWriter(node *xmlNode, formatFromParent *formatter, formats
 			return nil, err
 		}
 
-		rollingWriter, err := newRollingFileWriterSize(path, maxSize, maxRolls)
+		rollingWriter, err := newRollingFileWriterSize(path, maxSize, maxRolls, overwrite)
 		if err != nil {
 			return nil, err
 		}
@@ -846,7 +874,7 @@ func createrollingFileWriter(node *xmlNode, formatFromParent *formatter, formats
 			return nil, missingArgumentError(node.name, RollingFileDataPatternAttr)
 		}
 
-		rollingWriter, err := newRollingFileWriterDate(path, dataPattern)
+		rollingWriter, err := newRollingFileWriterDate(path, dataPattern, overwrite)
 		if err != nil {
 			return nil, err
 		}
@@ -857,8 +885,8 @@ func createrollingFileWriter(node *xmlNode, formatFromParent *formatter, formats
 	return nil, errors.New("Incorrect rolling writer type " + rollingTypeStr)
 }
 
-func createbufferedWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
-	err := checkUnexpectedAttribute(node, OutputFormatId, BufferedSizeAttr, BufferedFlushPeriodAttr)
+func createbufferedWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter, overwrite bool) (interface{}, error) {
+	err := checkUnexpectedAttribute(node, OutputFormatId, BufferedSizeAttr, BufferedFlushPeriodAttr, OverwriteAttr)
 	if err != nil {
 		return nil, err
 	}
@@ -890,9 +918,10 @@ func createbufferedWriter(node *xmlNode, formatFromParent *formatter, formats ma
 			return nil, err
 		}
 	}
+	overwrite = getOverwite(node, overwrite)
 
 	// Inner writer couldn't have its own format, so we pass 'currentFormat' as its parent format
-	receivers, err := createInnerReceivers(node, currentFormat, formats)
+	receivers, err := createInnerReceivers(node, currentFormat, overwrite, formats)
 	if err != nil {
 		return nil, err
 	}

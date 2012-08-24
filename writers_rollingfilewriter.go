@@ -64,7 +64,7 @@ func rollingTypeFromString(rollingTypeStr string) (rollingType rollingTypes, fou
 // the files count exceed the specified limit
 type rollingFileWriter struct {
 	fileName    string
-	fileDir     string       // Rolling files folder
+	fileDir     string // Rolling files folder
 	filePath    string
 	rollingType rollingTypes // Rolling mode (Files roll by size/date/...)
 
@@ -77,10 +77,11 @@ type rollingFileWriter struct {
 	currentFilePath string
 	currentFileSize int64
 	innerWriter     io.WriteCloser // Represents file
+	overwrite       bool
 }
 
 // newRollingFileWriterSize initializes a rolling writer with a 'Size' rolling mode
-func newRollingFileWriterSize(filePath string, maxFileSize int64, maxRolls int) (*rollingFileWriter, error) {
+func newRollingFileWriterSize(filePath string, maxFileSize int64, maxRolls int, overwrite bool) (*rollingFileWriter, error) {
 	if maxFileSize <= 0 {
 		return nil, errors.New("maxFileSize must be positive")
 	}
@@ -95,17 +96,19 @@ func newRollingFileWriterSize(filePath string, maxFileSize int64, maxRolls int) 
 	rollingFile.maxRolls = maxRolls
 	rollingFile.filePath = filePath
 	rollingFile.fileDir, rollingFile.fileName = filepath.Split(filePath)
+	rollingFile.overwrite = overwrite
 
 	return rollingFile, nil
 }
 
 // newRollingFileWriterSize initializes a rolling writer with a 'Date' rolling mode
-func newRollingFileWriterDate(filePath string, datePattern string) (*rollingFileWriter, error) {
+func newRollingFileWriterDate(filePath string, datePattern string, overwrite bool) (*rollingFileWriter, error) {
 	rollingFile := new(rollingFileWriter)
 	rollingFile.rollingType = Date
 	rollingFile.datePattern = datePattern
 	rollingFile.filePath = filePath
 	rollingFile.fileDir, rollingFile.fileName = filepath.Split(filePath)
+	rollingFile.overwrite = overwrite
 
 	return rollingFile, nil
 }
@@ -306,7 +309,7 @@ func (rollfileWriter *rollingFileWriter) createFileAndFolderIfNeeded() error {
 }
 
 func (rollfileWriter *rollingFileWriter) String() string {
-	
+
 	rollingTypeStr, ok := rollingTypesStringRepresentation[rollfileWriter.rollingType]
 	if !ok {
 		rollingTypeStr = "UNKNOWN"
