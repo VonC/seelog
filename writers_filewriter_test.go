@@ -43,8 +43,8 @@ func TestSimpleFileWriter(t *testing.T) {
 
 //===============================================================
 
-func simplefileWriterGetter(testCase *fileWriterTestCase) (io.Writer, error) {
-	return newFileWriter(testCase.fileName)
+func simplefileWriterGetter(testCase *fileWriterTestCase, overwrite bool) (io.Writer, error) {
+	return newFileWriter(testCase.fileName, overwrite)
 }
 
 //===============================================================
@@ -83,11 +83,11 @@ var simplefileWriterTests []*fileWriterTestCase = []*fileWriterTestCase{
 
 type fileWriterTester struct {
 	testCases   []*fileWriterTestCase
-	writerGeter func(*fileWriterTestCase) (io.Writer, error)
+	writerGeter func(*fileWriterTestCase, bool) (io.Writer, error)
 	t           *testing.T
 }
 
-func newfileWriterTester(testCases []*fileWriterTestCase, writerGeter func(*fileWriterTestCase) (io.Writer, error), t *testing.T) *fileWriterTester {
+func newfileWriterTester(testCases []*fileWriterTestCase, writerGeter func(*fileWriterTestCase, bool) (io.Writer, error), t *testing.T) *fileWriterTester {
 	return &fileWriterTester{testCases, writerGeter, t}
 }
 
@@ -123,7 +123,7 @@ func (this *fileWriterTester) test() {
 
 		fileSystemWrapper = fileSystemWrapperTest
 
-		fileWriter, err := this.writerGeter(testCase)
+		fileWriter, err := this.writerGeter(testCase, false)
 		if err != nil {
 			this.t.Error(err)
 			return

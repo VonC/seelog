@@ -25,14 +25,16 @@
 package seelog
 
 import (
-	"testing"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
 )
 
 const (
 	shortPath    = "common_context_test.go"
-	commonPrefix = "github.com/cihub/seelog."
+	commonPrefix = getCommonPrefix()
 )
 
 var testFullPath string
@@ -49,6 +51,14 @@ func fullPath(t *testing.T) string {
 	}
 
 	return testFullPath
+}
+
+type s struct{}
+
+func getCommonPrefix() string {
+	var v1 = reflect.TypeOf((*s)(nil)).Elem()
+	sv1 := v1.String()[:strings.LastIndex(v1.String(), ".")]
+	return sv1
 }
 
 func TestContext(t *testing.T) {

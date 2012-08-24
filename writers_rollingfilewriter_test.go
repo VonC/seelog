@@ -35,11 +35,11 @@ func TestrollingFileWriter(t *testing.T) {
 
 //===============================================================
 
-func rollingfileWriterGetter(testCase *fileWriterTestCase) (io.Writer, error) {
+func rollingfileWriterGetter(testCase *fileWriterTestCase, overwrite bool) (io.Writer, error) {
 	if testCase.rollingType == Size {
-		return newRollingFileWriterSize(testCase.fileName, testCase.fileSize, testCase.maxRolls)
+		return newRollingFileWriterSize(testCase.fileName, testCase.fileSize, testCase.maxRolls, overwrite)
 	} else if testCase.rollingType == Date {
-		return newRollingFileWriterDate(testCase.fileName, testCase.datePattern)
+		return newRollingFileWriterDate(testCase.fileName, testCase.datePattern, overwrite)
 	}
 
 	panic("Incorrect rollingType")
