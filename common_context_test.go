@@ -33,8 +33,7 @@ import (
 )
 
 const (
-	shortPath    = "common_context_test.go"
-	commonPrefix = getCommonPrefix()
+	shortPath = "common_context_test.go"
 )
 
 var testFullPath string
@@ -57,14 +56,14 @@ type s struct{}
 
 func getCommonPrefix() string {
 	var v1 = reflect.TypeOf((*s)(nil)).Elem()
-	sv1 := v1.String()[:strings.LastIndex(v1.String(), ".")]
+	sv1 := v1.String()[:strings.LastIndex(v1.String(), ".")+1]
 	return sv1
 }
 
 func TestContext(t *testing.T) {
 	context, err := currentContext()
 
-	nameFunc := commonPrefix + "TestContext"
+	nameFunc := getCommonPrefix() + "TestContext"
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err.Error())
@@ -96,7 +95,7 @@ func innerContext() (context logContextInterface, err error) {
 func TestInnerContext(t *testing.T) {
 	context, err := innerContext()
 
-	nameFunc := commonPrefix + "innerContext"
+	nameFunc := getCommonPrefix() + "innerContext"
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err.Error())
