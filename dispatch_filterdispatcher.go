@@ -36,7 +36,7 @@ type filterDispatcher struct {
 }
 
 // newFilterDispatcher creates a new filterDispatcher using a list of allowed levels. 
-func newFilterDispatcher(formatter *formatter, receivers []interface{}, allowList ...LogLevel) (*filterDispatcher, error) {
+func newFilterDispatcher(formatter *formatter, receivers []interface{}, exception *logLevelException, allowList ...LogLevel) (*filterDispatcher, error) {
 	disp, err := createDispatcher(formatter, receivers)
 	if err != nil {
 		return nil, err
@@ -51,10 +51,10 @@ func newFilterDispatcher(formatter *formatter, receivers []interface{}, allowLis
 }
 
 func (filter *filterDispatcher) Dispatch(
-		message string, 
-		level LogLevel, 
-		context logContextInterface, 
-		errorFunc func(err error)) {
+	message string,
+	level LogLevel,
+	context logContextInterface,
+	errorFunc func(err error)) {
 	isAllowed, ok := filter.allowList[level]
 	if ok && isAllowed {
 		filter.dispatcher.Dispatch(message, level, context, errorFunc)

@@ -304,35 +304,41 @@ func getExceptions(config *xmlNode) ([]*logLevelException, error) {
 		if exceptionNode.name != ExceptionId {
 			return nil, errors.New("Incorrect nested element in exceptions section: " + exceptionNode.name)
 		}
-
-		err := checkUnexpectedAttribute(exceptionNode, MinLevelId, MaxLevelId, LevelsId, FuncPatternId, FilePatternId)
+		exception, err := getException(exceptionNode)
 		if err != nil {
 			return nil, err
 		}
-
-		constraints, err := getConstraints(exceptionNode)
-		if err != nil {
-			return nil, errors.New("Incorrect " + ExceptionsId + " node: " + err.Error())
-		}
-
-		funcPattern, isFuncPattern := exceptionNode.attributes[FuncPatternId]
-		filePattern, isFilePattern := exceptionNode.attributes[FilePatternId]
-		if !isFuncPattern {
-			funcPattern = "*"
-		}
-		if !isFilePattern {
-			filePattern = "*"
-		}
-
-		exception, err := newLogLevelException(funcPattern, filePattern, constraints)
-		if err != nil {
-			return nil, errors.New("Incorrect exception node: " + err.Error())
-		}
-
 		exceptions = append(exceptions, exception)
 	}
 
 	return exceptions, nil
+}
+
+func getException(exceptionNode *xmlNode) (*logLevelException, error) {
+	err := checkUnexpectedAttribute(exceptionNode, MinLevelId, MaxLevelId, LevelsId, FuncPatternId, FilePatternId)
+	if err != nil {
+		return nil, err
+	}
+
+	constraints, err := getConstraints(exceptionNode)
+	if err != nil {
+		return nil, errors.New("Incorrect " + ExceptionsId + " node: " + err.Error())
+	}
+
+	funcPattern, isFuncPattern := exceptionNode.attributes[FuncPatternId]
+	filePattern, isFilePattern := exceptionNode.attributes[FilePatternId]
+	if !isFuncPattern {
+		funcPattern = "*"
+	}
+	if !isFilePattern {
+		filePattern = "*"
+	}
+
+	exception, err := newLogLevelException(funcPattern, filePattern, constraints)
+	if err != nil {
+		return nil, errors.New("Incorrect exception node: " + err.Error())
+	}
+	return exception, nil
 }
 
 func checkDistinctExceptions(exceptions []*logLevelException) error {
@@ -581,7 +587,7 @@ func createSplitter(node *xmlNode, formatFromParent *formatter, formats map[stri
 }
 
 func createFilter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {
-	err := checkUnexpectedAttribute(node, OutputFormatId, FilterLevelsAttrId)
+	err := checkUnexpectedAttribute(node, OutputFormatId, FilterLevelsAttrId, FuncPatternId)
 	if err != nil {
 		return nil, err
 	}
@@ -609,8 +615,11 @@ func createFilter(node *xmlNode, formatFromParent *formatter, formats map[string
 	if err != nil {
 		return nil, err
 	}
-
-	return newFilterDispatcher(currentFormat, receivers, levels...)
+	exception, err := getException(node)
+	if err != nil {
+		return nil, err
+	}
+	return newFilterDispatcher(currentFormat, receivers, exception, levels...)
 }
 
 func createfileWriter(node *xmlNode, formatFromParent *formatter, formats map[string]*formatter) (interface{}, error) {

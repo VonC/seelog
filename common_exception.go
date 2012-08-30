@@ -26,9 +26,9 @@ package seelog
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
-	"fmt"
 )
 
 // Used in rules creation to validate input file and func filters
