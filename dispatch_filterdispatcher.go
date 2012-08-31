@@ -33,6 +33,7 @@ import (
 type filterDispatcher struct {
 	*dispatcher
 	allowList map[LogLevel]bool
+	exception *logLevelException
 }
 
 // newFilterDispatcher creates a new filterDispatcher using a list of allowed levels. 
@@ -47,7 +48,7 @@ func newFilterDispatcher(formatter *formatter, receivers []interface{}, exceptio
 		allows[allowLevel] = true
 	}
 
-	return &filterDispatcher{disp, allows}, nil
+	return &filterDispatcher{disp, allows, exception}, nil
 }
 
 func (filter *filterDispatcher) Dispatch(
@@ -57,7 +58,10 @@ func (filter *filterDispatcher) Dispatch(
 	errorFunc func(err error)) {
 	isAllowed, ok := filter.allowList[level]
 	if ok && isAllowed {
-		filter.dispatcher.Dispatch(message, level, context, errorFunc)
+		if filter.exception == nil ||
+			(filter.exception.MatchesContext(context) && filter.exception.IsAllowed(level)) {
+			filter.dispatcher.Dispatch(message, level, context, errorFunc)
+		}
 	}
 }
 
