@@ -60,7 +60,6 @@ func (fileWriter *fileWriter) Write(bytes []byte) (n int, err error) {
 }
 
 func (fileWriter *fileWriter) createFile(overwrite bool) error {
-
 	folder, _ := filepath.Split(fileWriter.fileName)
 
 	err := fileSystemWrapper.MkdirAll(folder)
@@ -70,7 +69,10 @@ func (fileWriter *fileWriter) createFile(overwrite bool) error {
 	}
 
 	var innerWriter io.WriteCloser
-	if fileSystemWrapper.Exists(fileWriter.fileName) && !overwrite {
+	if fileSystemWrapper.Exists(fileWriter.fileName) && overwrite {
+		fileSystemWrapper.Remove(fileWriter.fileName)
+	}
+	if fileSystemWrapper.Exists(fileWriter.fileName) {
 		innerWriter, err = fileSystemWrapper.Open(fileWriter.fileName)
 	} else {
 		innerWriter, err = fileSystemWrapper.Create(fileWriter.fileName)
